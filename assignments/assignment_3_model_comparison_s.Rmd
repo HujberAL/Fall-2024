@@ -6,6 +6,22 @@ editor_options:
   chunk_output_type: console
 ---
 
+```{r}
+#install.packages("readxl")
+#install.packages("car")
+#install.packages("lmtest")
+#install.packages("broom")
+```
+
+```{r}
+library(readxl)
+library(car)
+library(lmtest)
+library(broom)
+library(dplyr)
+library(tidyr)
+```
+
 In this lab assignment you are going to work with (simulated) data related to perioperative pain and its psychological and hormonal predictors. In the assignment you will assess the added benefit of including some psychological and hormonal predictors to the already established demographic predictors of pain.
 
 In this assignment you will set up a hierarchical regression model to predict postoperative pain after wisdom tooth surgery. 
@@ -18,7 +34,7 @@ Your first study in this area is related to assessing the influence of trait and
 
 # Procedures and measures
 
-Use the data file called ‘assignment_3_dataset’, from the 'data/' folder.
+Use the data file called ‘assingment_3_dataset’, from the 'data/' folder.
 
 You have collected data from 160 adults who were scheduled to undergo surgical extraction of the third mandibular molar (wisdom tooth surgery). Patients filled out a form in the waiting room before their surgery. The form contained questions about their sex, age, and weight, and psychological questionnaires assessing anxiety, pain catastrophizing, and mindfulness (see descriptions below). You also got blood samples and saliva samples from participants in the waiting room 5 minutes before their operations to determine the serum (a component of the blood) and salivary cortisol levels of participants. Participants were contacted 5 hours after the surgery to see how much pain they were experiencing. The __level of pain__ at that moment was recorded using a numerical rating scale using a __scale of 0 to 10__, where 0 means “no pain” and 10 means “worst pain I can imagine”. 
 
@@ -59,7 +75,7 @@ In your discussion of the findings, briefly interpret the results of the above a
 Read the dataset used in this assignment. Pay attention to the extension of the datafile.
 
 ```{r}
-
+used_dataset <- read_excel("C:\\Users\\Albert\\ELTE_PhD_2024_Fall\\Assignment_3\\Dataset\\assignment_3_dataset_.xlsx")
 ```
 
 ## Data and model diagnostics 
@@ -69,7 +85,10 @@ Read the dataset used in this assignment. Pay attention to the extension of the 
 Run an exploratory data analysis (EDA) to investigate the dataset.
 
 ```{r}
-
+head(used_dataset)
+dim(used_dataset)
+colnames(used_dataset)
+str(used_dataset)
 ```
 
 #### Correct coding errors
@@ -77,8 +96,15 @@ Run an exploratory data analysis (EDA) to investigate the dataset.
 If you find values in the dataset during the EDA, that are not correct based on the provided descriptions of the variables of the dataset please correct them here.
 
 ```{r}
-
+used_dataset <- used_dataset %>%
+  mutate(sex = gsub("woman", "female", sex))
+         
+used_dataset$pain <- ifelse(used_dataset$pain < 0 | used_dataset$pain > 10, NA, used_dataset$pain)
+used_dataset$STAI_trait <- ifelse(used_dataset$STAI_trait < 20 | used_dataset$STAI_trait > 80, NA, used_dataset$STAI_trait)
+used_dataset$pain_cat <- ifelse(used_dataset$pain_cat < 0 | used_dataset$pain_cat > 52, NA, used_dataset$pain_cat)
+used_dataset$mindfulness <- ifelse(used_dataset$mindfulness < 1 | used_dataset$mindfulness > 6, NA, used_dataset$mindfulness)
 ```
+"female" and "woman" in one category and checking the thresholds of values and replacing the wrong values with NA (e.g. pain = 50)
 
 ### Model diagnostics
 #### Build the more complex model
@@ -86,7 +112,9 @@ If you find values in the dataset during the EDA, that are not correct based on 
 In order to test the more complex model for outliers and to test the assumptions first build the model.
 
 ```{r}
-
+str(used_dataset)
+used_dataset$sex <- as.factor(used_dataset$sex)
+com_model <- lm(pain ~ age + sex + STAI_trait + pain_cat + mindfulness + cortisol_serum + cortisol_saliva, data = used_dataset)
 ```
 
 #### Checking for influential outliers
@@ -94,7 +122,12 @@ In order to test the more complex model for outliers and to test the assumptions
 Check for outlier values in the model.
 
 ```{r}
+cooks_distance <- cooks.distance(com_model)
 
+influential_points <- which(cooks_distance > 1)
+
+influential_points
+cooks_distance[influential_points]
 ```
 
 #### Checking assumptions
@@ -102,20 +135,28 @@ Check for outlier values in the model.
 Check the normality assumption.
 
 ```{r}
+plot(com_model, which = 2)
+residuals <- residuals(com_model)
 
+shapiro.test(residuals)
 ```
+The assumption of normality is not violated in the model. It has a normal distribution.
 
 Check the linearity assumption.
 
 ```{r}
-
+plot(com_model, which = 1)
+crPlots(com_model)
 ```
 
 Check the homoscedasticty assumption (homogeneity of variance).
 
 ```{r}
+plot(com_model, which = 3)
 
+bptest(com_model)
 ```
+The assumption of homoscedasticity is satisfied.
 
 Check the multicollinearity assumption.
 
@@ -126,21 +167,27 @@ https://statisticalhorizons.com/multicollinearity
 http://blog.minitab.com/blog/understanding-statistics/handling-multicollinearity-in-regression-analysis
 
 ```{r}
-
+vif(com_model)
 ```
+Cortisol_serum and cortisol_saliva have to be removed due to high VIF-value.
 
 ### Making decision based on model diagnostics
 
 If based on the assumption tests you decide to drop a predictor variable you should do that here. Create your updated model.
 
 ```{r}
-
+upd_model <- lm(pain ~ age + sex + STAI_trait + pain_cat + mindfulness, data = used_dataset)
 ```
 
 #### Checking outliers of the updated model
 
 ```{r}
+cooks_distance <- cooks.distance(upd_model)
 
+inf_points <- which(cooks_distance > 1)
+
+inf_points
+cooks_distance[inf_points]
 ```
 
 #### Checking assumptions of the updated model
@@ -148,25 +195,31 @@ If based on the assumption tests you decide to drop a predictor variable you sho
 Normality assumption
 
 ```{r}
+plot(upd_model, which = 2)
+residuals_upd <- residuals(upd_model)
 
+shapiro.test(residuals_upd)
 ```
 
 Linearity assumption
 
 ```{r}
-
+plot(upd_model, which = 1)
+crPlots(upd_model)
 ```
 
-Homoscedasticty assumption (homogeneity of variance)
+Homoscedasticity assumption (homogeneity of variance)
 
 ```{r}
+plot(upd_model, which = 3)
 
+bptest(upd_model)
 ```
 
 Multicollinearity assumption
 
 ```{r}
-
+vif(upd_model)
 ```
 
 ## Model comparison
@@ -174,18 +227,89 @@ Multicollinearity assumption
 Create the simple model and get the results of the model that needs to be reported based on the What to report section.
 
 ```{r}
+used_dataset$sex <- as.factor(used_dataset$sex)
+sim_model <- lm(pain ~ age + sex, data = used_dataset)
 
+sim_model_summary <- summary(sim_model)
+sim_model_adj_r2 <- sim_model_summary$adj.r.squared
+sim_model_f <- sim_model_summary$fstatistic
+sim_model_p <- pf(sim_model_f[1], sim_model_f[2], sim_model_f[3], lower.tail = FALSE)
+
+sim_model_coef <- tidy(sim_model, conf.int = TRUE)
+
+standardize <- function(model, data) {
+  numeric_columns <- c("age")
+  standardized_data <- data
+  standardized_data[numeric_columns] <- scale(data[numeric_columns])
+  std_model <- lm(formula(model), data = standardized_data)
+  tidy(std_model, conf.int = TRUE)
+}
+
+sim_std_coef <- standardize(sim_model, used_dataset)
 ```
 
 Create the more complex model based on the results of the model diagnostics. Also, get the results that needs to be reported based on the What to report section.
 
 ```{r}
 
+standardize_data <- function(data, predictors) {
+
+  data_standardized <- data
+  data_standardized[predictors] <- scale(data[predictors])
+  return(data_standardized)
+}
+
+pred <- c("age", "STAI_trait", "pain_cat", "mindfulness")
+
+data_std <- standardize_data(used_dataset, pred)
+
+# com_model <- lm(pain ~ age + sex + STAI_trait + pain_cat + mindfulness, data = used_dataset)
+
+upd_model_summary <- summary(upd_model)
+upd_model_adj_r2 <- upd_model_summary$adj.r.squared
+upd_model_f <- upd_model_summary$fstatistic
+upd_model_p <- pf(upd_model_f[1], upd_model_f[2], upd_model_f[3], lower.tail = FALSE)
+
+upd_model_coef <- tidy(upd_model, conf.int = TRUE)
+
+upd_std_model <- lm(pain ~ age + sex + STAI_trait + pain_cat + mindfulness, data = data_std)
+upd_std_coef <- tidy(upd_std_model, conf.int = TRUE)
+
+coefficients <- coef(upd_model)
+names <- names(coefficients)
+
+regr_equ <- paste0("Y = ", round(coefficients[1], 3))
+for (i in 2:length(coefficients)) {
+  regr_equ <- paste0(
+    regr_equ, " + (", round(coefficients[i], 3), " * ", names[i], ")"
+  )
+}
+
+cat("Regression Equation:\n", regr_equ, "\n")
 ```
 
 Compare the two models.
 
 ```{r}
 
-```
+dataset_clean <- used_dataset %>%
+  select(pain, age, sex, STAI_trait, pain_cat, mindfulness) %>%
+  drop_na()
 
+sim_model_clean <- lm(pain ~ age + sex, data = dataset_clean)
+
+upd_model_clean <- lm(pain ~ age + sex + STAI_trait + pain_cat + mindfulness, 
+                             data = dataset_clean)
+
+aic_simple <- AIC(sim_model_clean)
+aic_complex <- AIC(upd_model_clean)
+
+cat("AIC for Simple Model: ", aic_simple, "\n")
+cat("AIC for Complex Model: ", aic_complex, "\n")
+
+lr_test <- anova(sim_model_clean, upd_model_clean, test = "LRT")
+
+cat("Likelihood Ratio Test (F-test and p-value):\n")
+print(lr_test)
+```
+Comparing the AIC values, the complex model is accepted as a better fit.
