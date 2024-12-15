@@ -14,24 +14,50 @@ You will have to create 3 plots based on the datasets and instructions detailed 
 -   Reporting using RMarkdown
 -   Using Git and Github (for submitting the task)
 -   Data manipulation (e.g. dplyr, tidyr), and working with factors (forcats)
--   Data visuzlization (ggplot2)
+-   Data visualization (ggplot2)
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library(tidyverse)
 library(tidytuesdayR)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(scales)
+library(RColorBrewer)
 ```
 
 ## Task 1: Climbing expeditions
 
-The 2020-09-22 TidyTueday datasets are about climbing expeditions. From the three datasets, use the "expeditions". Reproduce the plot below! Notice a few things:
+The 2020-09-22 TidyTuesday datasets are about climbing expeditions. From the three datasets, use the "expeditions". Reproduce the plot below! Notice a few things:
 
 -   Use `forcats::fct_lump()` to get the 15 most frequent peaks, and drop the "Other" category.
 -   The bars are ordered by the sum of all expeditions (use `fct_reorder()`).
 -   The bar colors use the viridis palette and light theme.
 
 ```{r}
+expeditions_data <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/refs/heads/main/data/2020/2020-09-22/expeditions.csv", sep = ',', stringsAsFactors = FALSE)
+top_peaks <- expeditions_data %>%
+  mutate(peak_name = fct_lump(peak_name, n = 15)) %>%  # Keep only the top 15 peaks, lump others into "Other"
+  filter(peak_name != "Other") %>%  # Remove the "Other" category
+  count(peak_name, season) %>%  # Count expeditions per peak and season
+  group_by(peak_name) %>% 
+  mutate(total_expeditions = sum(n)) %>%  # Calculate total expeditions per peak
+  ungroup() %>%
+  mutate(peak_name = fct_reorder(peak_name, total_expeditions, .desc = FALSE)) 
 
+ggplot(top_peaks, aes(x = n, y = peak_name, fill = season)) +
+  geom_bar(stat = "identity") +  # Bar chart with height proportional to expeditions_count
+  scale_fill_viridis_d(option = "D") +  # Apply viridis palette
+  theme_minimal() +  # Use a light theme
+  theme(axis.text.x = element_text(angle = 0, hjust = 1), legend.position = "bottom") +  # Rotate x-axis text
+  labs(
+    title = "The 15 most popular peaks stacked by season of expedition",
+    x = "Number of expeditions",
+    y = "",
+    fill = "season"
+  )
+  
 ```
 
 ## Task 2: PhDs awarded
@@ -45,7 +71,20 @@ Notes:
 -   The line size is 1.2, the colors are from the brewer "Dark2" palette. The theme is set to minimal.
 
 ```{r}
+phd_data <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/refs/heads/main/data/2019/2019-02-19/phd_by_field.csv", sep = ',', stringsAsFactors = FALSE)
+phd_aggregated <- phd_data %>%
+  group_by(year, broad_field) %>%
+  summarise(total_phds = sum(n_phds, na.rm = TRUE)) %>%
+  ungroup
 
+ggplot(phd_aggregated, aes(x = year, y = total_phds, color = broad_field)) +
+  geom_line(size = 1.2) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = comma_format()) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  labs(title = "Number of awarded Ph.D.-s in the US by year", x = "", y = "", color = "Broad field") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))
 ```
 
 ## Task 3: Commute in the US
@@ -59,5 +98,27 @@ Notes:
 -   The point size is 2, . The theme is set to light.
 
 ```{r}
+commute_data <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/refs/heads/main/data/2019/2019-11-05/commute.csv", sep = ',', stringsAsFactors = FALSE)
+walk_aggregated <- commute_data %>%
+  filter(mode == "Walk") %>%
+  group_by(state, state_region, state_abb) %>%
+  summarise(total_walk_n = sum(n, na.rm = TRUE))
+bike_aggregated <- commute_data %>%
+  filter(mode == "Bike") %>%
+  group_by(state, state_region) %>%
+  summarise(total_bike_n = sum(n, na.rm = TRUE))
+
+walk_bike_merge <- left_join(walk_aggregated, bike_aggregated, by = "state")
+  
+ggplot(walk_bike_merge, aes(x = total_walk_n, y = total_bike_n, color=state_region.x)) +
+  geom_point(size = 2) +  # Plot points with size = 2
+  geom_text(aes(label = state_abb), color = "black", size = 5) +
+  scale_x_log10(labels = comma_format()) +  # Log-transformed x-axis with comma-formatted labels
+  scale_y_log10(limits = c(30, NA), labels = comma_format()) +  # Log-transformed y-axis with comma-formatted labels
+  labs(title = "Title number of people walking vs. biking to work in each USA state", x = "Number of ppl walking to work (log N)", y = "Number of ppl biking to work (log N)", color = "State region") +
+  theme_light() +  # Light theme
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
 
 ```
