@@ -12,6 +12,8 @@ knitr::opts_chunk$set(echo = FALSE)
 #install.packages("car")
 #install.packages("lmtest")
 #install.packages("broom")
+#install.packages("openxlsx")
+#install.packages("httr")
 library(readxl)
 library(car)
 library(lmtest)
@@ -20,6 +22,8 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(ggplot2)
+library(openxlsx)
+library(httr)
 ```
 
 In this lab assignment you are going to work with (simulated) data related to perioperative pain and its psychological and hormonal predictors. In the assignment you will assess the added benefit of including some psychological and hormonal predictors to the already established demographic predictors of pain.
@@ -75,8 +79,10 @@ In your discussion of the findings, briefly interpret the results of the above a
 Read the dataset used in this assignment. Pay attention to the extension of the datafile.
 
 ```{r}
-used_dataset <- read_excel("C:\\Users\\Albert\\ELTE_PhD_2024_Fall\\Assignment_3\\Dataset\\assignment_3_dataset_.xlsx")
-# Reading the dataset
+dataset_url <- "https://github.com/HujberAL/Fall-2024/raw/refs/heads/main/data/assignment_3_dataset_.xlsx"
+dataset_temp <- tempfile(fileext = ".xlsx")
+GET(dataset_url, write_disk(dataset_temp)) # Get the content of the file
+used_dataset <- read_xlsx(dataset_temp) # Reading the dataset from the temporary file
 ```
 
 ## Data and model diagnostics 
