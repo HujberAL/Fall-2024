@@ -20,6 +20,7 @@ library(tidyverse)
 library(readr)
 library(dplyr)
 library(tidyr)
+library(stringr)
 ```
 
 # Background
@@ -36,8 +37,7 @@ Read the cocktail dataset from: <https://github.com/nthun/cocktail-balance> You 
 
 ```{r}
 # Reading the raw dataset from the link
-# cocktail_data <- read_tsv("C:\\Assignment\\cocktail_data.tsv")
-cocktail_data <- read.delim("https://raw.githubusercontent.com/nthun/cocktail-balance/refs/heads/master/cocktail_data.tsv", sep = "\t", stringsAsFactors = FALSE)
+cocktails <- read.delim("https://raw.githubusercontent.com/nthun/cocktail-balance/refs/heads/master/cocktail_data.tsv", sep = "\t", stringsAsFactors = FALSE)
 ```
 
 ## 2. Transform the data table and clean the ingredient variable!
@@ -46,11 +46,10 @@ The ingredients are currently in a single cell for each cocktail. It would be be
 
 ```{r}
 # Collecting the texts to delete
-units <- c("oz", "drops", "dashes", "dash", "drop", "bsp", "% abv")
+units <- c("oz", "drops", "dashes", "dash", "drop", "bsp", "% abv") # Collecting the texts to be removed
 
-cocktail_data_cleaned <- cocktail_data %>%
-  mutate(ingredients = gsub("<br>", "<br/>", ingredients)) %>%
-  mutate(ingredients = gsub("<b4>", "<br/>", ingredients)) %>%
+cocktails_used <- cocktails %>%
+  mutate(ingredients = str_replace_all(ingredients, "<b4/>|<br>", "<br/>")) %>% # Correcting false separators
   separate_rows(ingredients, sep = "<br/>") %>% # Separate rows by ingredient
   mutate(ingredients = str_remove_all(ingredients, paste0("\\b(", paste(units, collapse = "|"), ")\\b"))) %>% # Remove all units
   mutate(ingredients = str_remove_all(ingredients, "\\.|\\/|\\([^)]*\\)")) %>% # Remove all unwanted special characters
@@ -64,9 +63,8 @@ cocktail_data_cleaned <- cocktail_data %>%
 Before opening the bar, you need to find a reliable supplier that has all the ingredients. You need to send a list of all possible ingredients you will need. They don't need the quantities (i.e. how many of these are needed), just the names of the ingredients.
 
 ```{r}
-ingredient_list <- unique(cocktail_data_cleaned$ingredients) # Creating the names of ingredients, each only once
-ingredient_list <- sort(ingredient_list, decreasing = FALSE)
-ingredient_list
+cocktail_ings <- sort(unique(cocktails_used$ingredients), decreasing = FALSE) # Creating the names of ingredients, each only once in alphabetical order
+cocktail_ings
 ```
 
 ## 4. Number of unique ingredients
@@ -74,8 +72,8 @@ ingredient_list
 How many different ingredients you will need?
 
 ```{r}
-sum_ingredients <- length(ingredient_list) # Length of the above created list = sum of ingredients
-sum_ingredients
+sum_ings <- length(cocktail_ings) # Length of the above created list = sum of ingredients
+sum_ings
 ```
 
 ## 5. What are the top 10 ingredients?
@@ -83,16 +81,16 @@ sum_ingredients
 What are the 10 most frequently used ingredients? If there are ties, you can list more than 10.
 
 ```{r}
-ingredient_frequency <- cocktail_data_cleaned %>%
+ing_times <- cocktails_used %>%
   group_by(ingredients) %>% # Grouping by ingredients
-  summarise(count = n()) %>% # Count how many times each ingredient presents
+  summarise(count = n()) %>% # Count how many times each ingredient appears in the list
   arrange(desc(count)) # Arrange in descending order
 
-threshold <- ingredient_frequency$count[10] # Tenth number is what we need
-top_ingredients <- ingredient_frequency %>%
-  filter(count >= threshold) %>% # if the number is bigger than the threshold...
+ing_thr <- ing_times$count[10] # Value of tenth element is what we need
+top_10_ing <- ing_times %>%
+  filter(count >= ing_thr) %>% # if the number of appearances in the list is bigger than the threshold...
   pull(ingredients) # ...get the ingredient
-top_ingredients
+top_10_ing
 ```
 
 ## 6. Which cocktail(s) has/have the most ingredients?
@@ -100,52 +98,53 @@ top_ingredients
 Count the number of ingredients and filter all the cocktails that has that many.
 
 ```{r}
-num_cocktail_ingredient <- cocktail_data_cleaned %>%
-  group_by(name) %>%  # Replace `cocktail_name` with your actual column name
-  summarise(num_ingredients = n()) %>%
-  arrange(desc(num_ingredients))
+cocktail_most_ings <- cocktails_used %>%
+  group_by(name) %>%  # Group the cocktails by name
+  summarise(num_ings = n()) %>% # Count the ingredients of each cocktail
+  arrange(desc(num_ings)) # Arrange in descending order
 
-max_ingredients <- max(num_cocktail_ingredient$num_ingredients)
+cocktail_max_ings <- max(cocktail_most_ings$num_ings) # Get the maximum value of the above created list
 
-most_ingredients_cocktail <- num_cocktail_ingredient %>%
-  filter(num_ingredients == max_ingredients) %>%
-  pull(name)
-most_ingredients_cocktail
+cocktail_max_ings <- cocktail_most_ings %>%
+  filter(num_ings == cocktail_max_ings) %>% # If the number of ingredients equals the maximum value...
+  pull(name) # Get the name of the cocktail
+cocktail_max_ings
 ```
 
 ## 7. How many ingredients appear in only one cocktail (rare ingredient)?
 
 ```{r}
-num_rare_ingredients <- cocktail_data_cleaned %>%
-  group_by(ingredients) %>%
-  summarise(num_cocktails = n_distinct(name)) %>%
-  filter(num_cocktails == 1) %>%
-  nrow()
-num_rare_ingredients
+num_rare_ings <- cocktails_used %>%
+  group_by(ingredients) %>% # Group the cocktails by ingredients
+  summarise(num_cocktails = n_distinct(name)) %>% # Sum up the number of different cocktails by ingredients
+  filter(num_cocktails == 1) %>% # We need only the ingredients that appear in one
+  nrow() # Count the number of rows
+num_rare_ings
 ```
 
 ## 8. Which cocktail has an ingredient that is only used in one cocktail?
 
 ```{r}
-num_cocktails_per_ingredients <- cocktail_data_cleaned %>%
-  group_by(ingredients) %>%
-  summarise(num_cocktails = n_distinct(name)) %>%
-  filter(num_cocktails == 1) %>%
-  pull(ingredients)
+rare_ings <- cocktails_used %>%
+  group_by(ingredients) %>% # Group the cocktails by ingredients
+  summarise(num_cocktails = n_distinct(name)) %>% # Sum up the number of different cocktails by ingredients
+  filter(num_cocktails == 1) %>% # We need only the ingredients that appear in one
+  pull(ingredients) # Get the name of these ingredients
 
-cocktails_with_rare_ingredients <- cocktail_data_cleaned %>%
-  filter(ingredients %in% num_cocktails_per_ingredients) %>%
-  distinct(name)
-cocktails_with_rare_ingredients
+rare_ings_cocktail <- cocktails_used %>%
+  filter(ingredients %in% rare_ings) %>% # Select the ingredients which are rare
+  distinct(name) # Get the names of the assigned cocktails
+rare_ings_cocktail
 ```
 
 ## 9. What are the cocktails without rare ingredients?
 
 ```{r}
-cocktails_without_rare_ingredients <- cocktail_data_cleaned %>%
-  filter(!ingredients %in% num_cocktails_per_ingredients) %>%
-  distinct(name)
-cocktails_without_rare_ingredients
+no_rare_ings_cocktail <- cocktails_used %>%
+  group_by(name) %>% # Group the cocktails by name
+  filter(all(!ingredients %in% rare_ings)) %>% # Select the cocktails which have only ingredients which are NOT rare
+  distinct(name) # Get the names of the assigned cocktails
+no_rare_ings_cocktail
 ```
 
 ## 10. Create a cheat sheet for the bartender!
@@ -153,24 +152,21 @@ cocktails_without_rare_ingredients
 Create a matrix that shows all cocktail names as rows and all ingredients as columns. When a cocktail requires an ingredient, there should be an "X" in the cell, otherwise, the cell should remain empty. Example:
 
 ```{r}
-# Create a matrix with cocktail names as rows and ingredients as columns
-cocktail_data_grouped <- cocktail_data_cleaned %>%
-  group_by(name) %>%
-  summarise(ingredients = list(unique(ingredients)), .groups = "drop")  # Aggregate into a list
+cocktails_grouped <- cocktails_used %>%
+  group_by(name) %>% # Group the cocktails by name
+  summarise(ingredients = list(unique(ingredients)), .groups = "drop")  # Aggregate each ingredient into a list and after that we have to drop the grouping because of further manipulation of the resulted dataset
 
-# Step 2: Unnest the ingredients into separate rows
-cocktail_data_unnested <- cocktail_data_grouped %>%
-  unnest(ingredients)
+cocktails_expand <- cocktails_grouped %>%
+  unnest(ingredients) # The columns with the list of ingredients expanded into individual rows
 
-# Step 3: Pivot into wide format, marking presence with "X"
-cocktail_matrix <- cocktail_data_unnested %>%
-  mutate(value = "X") %>%  # Mark presence with "X"
+cocktails_matrix <- cocktails_expand %>%
+  mutate(value = "X") %>%  # Mark each ingredient's presence with "X"
   pivot_wider(names_from = ingredients, 
               values_from = value, 
-              values_fill = list(value = ""))
+              values_fill = list(value = "")) # Creating the matrix with the names of cocktails, each of the ingredients and empty string if the ingredient does NOT appear
 
-cocktail_matrix <- column_to_rownames(cocktail_matrix, var = "name")
-cocktail_matrix
+cocktails_matrix <- column_to_rownames(cocktails_matrix, var = "name") # Transforming the names of cocktails into names of individual rows
+cocktails_matrix
 ```
 
 
